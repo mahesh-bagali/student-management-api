@@ -21,7 +21,11 @@ from sqlmodel import select
 
 from database import Student
 from schemas import StudentCreate
-from async_database import get_async_session
+
+from async_database import (
+    get_async_session,
+    close_async_database,
+)
 
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
@@ -53,9 +57,11 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     print("Application is starting...")
 
-    yield
-
-    print("Application is shutting down...")
+    try:
+        yield
+    finally:
+        print("Application is shutting down...")
+        await close_async_database()
 
 
 # =====================================

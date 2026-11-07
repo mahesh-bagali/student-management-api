@@ -1,8 +1,11 @@
-from sqlmodel import SQLModel, Field, Relationship, create_engine, Session
-from dotenv import load_dotenv
-import os
 
-load_dotenv()
+from sqlmodel import SQLModel, Field, Relationship, create_engine, Session
+from config import SYNC_DATABASE_URL
+
+
+# =====================================
+# DATABASE MODELS
+# =====================================
 
 class User(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
@@ -10,7 +13,8 @@ class User(SQLModel, table=True):
     email: str
     password_hash: str
     role: str = "user"
-    
+
+
 class Post(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     title: str
@@ -31,7 +35,7 @@ class StudentCourse(SQLModel, table=True):
 class Student(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     name: str
-    age:int
+    age: int
     profile_photo: str | None = None
 
     courses: list["Course"] = Relationship(
@@ -50,14 +54,19 @@ class Course(SQLModel, table=True):
     )
 
 
-postgres_url = os.getenv("DATABASE_URL")
+# =====================================
+# DATABASE ENGINE
+# =====================================
 
-if not postgres_url:
-    raise ValueError("DATABASE_URL is missing from .env file")
+engine = create_engine(
+    SYNC_DATABASE_URL,
+    echo=False
+)
 
-engine = create_engine(postgres_url)
-#SQLModel.metadata.create_all(engine)
 
+# =====================================
+# DATABASE SESSION
+# =====================================
 
 def get_session():
     with Session(engine) as session:

@@ -1,5 +1,5 @@
 from logging.config import fileConfig
-
+from config import SYNC_DATABASE_URL
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
@@ -17,7 +17,7 @@ load_dotenv()
 config = context.config
 load_dotenv()
 
-database_url = os.getenv("DATABASE_URL")
+database_url = SYNC_DATABASE_URL
 
 if database_url:
     config.set_main_option(
