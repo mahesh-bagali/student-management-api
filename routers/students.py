@@ -1,7 +1,10 @@
 
-from pathlib import Path
-from uuid import uuid4
+import asyncio
+from io import BytesIO
 from typing import Literal
+
+import cloudinary.uploader
+import cloudinary_config
 
 from fastapi import (
     APIRouter,
@@ -20,6 +23,7 @@ from database import (
     StudentCourse,
     get_session,
 )
+from schemas import StudentCreate
 from exceptions import StudentNotFoundError
 
 
@@ -29,25 +33,26 @@ router = APIRouter(
 )
 
 
-UPLOAD_DIR = Path("uploads")
-UPLOAD_DIR.mkdir(exist_ok=True)
-
-
 def log_student_created(student_id: int):
     print(f"Student {student_id} was created")
 
 
+# =====================================
 # CREATE STUDENT
+# =====================================
+
 @router.post(
     "/",
     summary="Create a student",
     description="Create a new student and schedule a background logging task."
 )
 def create_student(
-    student: Student,
+    student_data: StudentCreate,
     background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
 ):
+    student = Student(**student_data.model_dump())
+
     session.add(student)
     session.commit()
     session.refresh(student)
@@ -60,7 +65,11 @@ def create_student(
     return student
 
 
-# GET ALL STUDENTS + FILTER + SEARCH + SORT + PAGINATION
+# =====================================
+# GET ALL STUDENTS + FILTER + SEARCH
+# + SORT + PAGINATION
+# =====================================
+
 @router.get("/")
 def get_students(
     course: str | None = None,
@@ -73,7 +82,7 @@ def get_students(
 ):
     statement = select(Student)
 
-    # Filter by course through many-to-many relationship
+    # Filter by course
     if course:
         student_ids = (
             select(StudentCourse.student_id)
@@ -94,8 +103,7 @@ def get_students(
             Student.name.ilike(f"%{search}%")
         )
 
-    # Sort by course using the student's first
-    # alphabetically ordered course name
+    # Sort by course
     course_sort = (
         select(Course.name)
         .join(
@@ -128,7 +136,10 @@ def get_students(
     return session.exec(statement).all()
 
 
+# =====================================
 # GET ONE STUDENT
+# =====================================
+
 @router.get(
     "/{student_id}",
     summary="Get student by ID",
@@ -146,7 +157,10 @@ def get_student(
     return student
 
 
+# =====================================
 # UPDATE STUDENT
+# =====================================
+
 @router.put(
     "/{student_id}",
     summary="Update student",
@@ -176,11 +190,14 @@ def update_student(
     return student
 
 
+# =====================================
 # DELETE STUDENT
+# =====================================
+
 @router.delete(
     "/{student_id}",
     summary="Delete student",
-    description="Delete an existing student using their unique ID."
+    description="Delete an existing student using their unique student ID."
 )
 def delete_student(
     student_id: int,
@@ -202,11 +219,14 @@ def delete_student(
     }
 
 
-# UPLOAD STUDENT PHOTO
+# =====================================
+# UPLOAD STUDENT PHOTO - CLOUDINARY
+# =====================================
+
 @router.post(
     "/{student_id}/photo",
     summary="Upload student photo",
-    description="Upload or update a student's profile photo using their student ID."
+    description="Upload or update a student's profile photo using Cloudinary."
 )
 async def upload_student_photo(
     student_id: int,
@@ -221,25 +241,61 @@ async def upload_student_photo(
             detail="Student not found"
         )
 
-    extension = Path(file.filename or "").suffix
-    filename = f"{uuid4().hex}{extension}"
+    # Validate image type
+    allowed_types = [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+    ]
 
-    file_path = UPLOAD_DIR / filename
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail="Only JPEG, PNG, and WebP images are allowed"
+        )
 
     contents = await file.read()
 
-    with open(file_path, "wb") as f:
-        f.write(contents)
+    # Maximum upload size: 5 MB
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=413,
+            detail="Image size must not exceed 5 MB"
+        )
 
-    student.profile_photo = f"/uploads/{filename}"
+    if not contents:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded file is empty"
+        )
 
-    session.add(student)
-    session.commit()
-    session.refresh(student)
+    try:
+        result = await asyncio.to_thread(
+            cloudinary.uploader.upload,
+            BytesIO(contents),
+            folder="student_profiles",
+            resource_type="image",
+        )
 
-    return {
-        "message": "Student photo uploaded successfully",
-        "student_id": student.id,
-        "filename": filename,
-        "photo_url": student.profile_photo,
-    }
+        student.profile_photo = result["secure_url"]
+
+        session.add(student)
+        session.commit()
+        session.refresh(student)
+
+        return {
+            "message": "Student photo uploaded successfully",
+            "student_id": student.id,
+            "photo_url": student.profile_photo,
+        }
+
+    except Exception:
+        session.rollback()
+
+        raise HTTPException(
+            status_code=502,
+            detail="Photo upload failed. Please try again."
+        )
+
+    finally:
+        await file.close()

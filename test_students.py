@@ -1,5 +1,6 @@
 
 import pytest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from sqlmodel import SQLModel, Session, create_engine
@@ -100,7 +101,6 @@ def test_delete_student(client):
     assert check.status_code == 404
 
 
-
 def create_multiple_students(client):
     students = [
         {"name": "Rahul", "age": 21, "profile_photo": None},
@@ -163,7 +163,19 @@ def test_student_search_no_match(client):
     assert response.json() == []
 
 
-def test_upload_student_photo(client):
+# =====================================
+# CLOUDINARY PHOTO UPLOAD TEST
+# =====================================
+
+@patch("cloudinary.uploader.upload")
+def test_upload_student_photo(mock_upload, client):
+    mock_upload.return_value = {
+        "secure_url": (
+            "https://res.cloudinary.com/demo/image/upload/"
+            "student_profiles/test.jpg"
+        )
+    }
+
     created = create_test_student(client)
     student_id = created.json()["id"]
 
@@ -180,7 +192,12 @@ def test_upload_student_photo(client):
 
     assert response.status_code == 200
     assert response.json()["student_id"] == student_id
-    assert response.json()["photo_url"].startswith("/uploads/")
+
+    assert response.json()["photo_url"].startswith(
+        "https://res.cloudinary.com/"
+    )
+
+    mock_upload.assert_called_once()
 
 
 def test_filter_students_by_course(client):
