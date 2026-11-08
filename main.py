@@ -12,7 +12,6 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from sqlalchemy import text
@@ -180,11 +179,6 @@ app.add_middleware(
 # STATIC FILES
 # =====================================
 
-app.mount(
-    "/uploads",
-    StaticFiles(directory="uploads"),
-    name="uploads",
-)
 
 
 # =====================================
