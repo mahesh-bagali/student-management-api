@@ -168,7 +168,7 @@ The application is deployed using:
 
 - GitHub Repository: [https://github.com/mahesh-bagali/student-management-api](https://github.com/mahesh-bagali/student-management-api)
 - Live API: [https://student-management-api-tabs.onrender.com](https://student-management-api-tabs.onrender.com)
-- Live API Documentation:[https://student-management-api-tabs.onrender.com](https://student-management-api-tabs.onrender.com)/docs
+- Live API Documentation:[https://student-management-api-tabs.onrender.com](https://student-management-api-tabs.onrender.com/docs)
 
 ## Project Status
 
